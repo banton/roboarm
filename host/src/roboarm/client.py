@@ -164,7 +164,8 @@ class RoboarmClient:
             f"{self._base_url}/api/command",
             json={"command": command},
         )
-        return response.json()
+        result: dict[str, Any] = response.json()
+        return result
 
     def status(self) -> RoboarmStatus:
         """Get current status of the robotic arm."""
