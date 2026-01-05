@@ -35,29 +35,44 @@ struct MotorConfig {
     uint8_t dirPin;
     uint8_t enablePin;
     uint16_t stepsPerRev;
-    float maxSpeed;        // steps per second
-    float acceleration;    // steps per second^2
-    bool invertDir;        // Invert direction
-    const char* name;      // Joint name for debugging
+    uint8_t microstepping;
+    uint32_t maxSpeedHz;     // steps per second (FastAccelStepper uses Hz)
+    uint32_t acceleration;   // steps per second^2
+    bool invertDir;          // Invert direction
+    const char* name;        // Joint name for debugging
 };
 
 // =============================================================================
 // Pin Assignments
 // =============================================================================
 // Shared enable pin for all drivers (active LOW)
-#define MOTORS_ENABLE_PIN 15
+#define MOTORS_ENABLE_PIN 4
 
-// Default motor configurations
-// Adjust pins based on your actual wiring!
+// Motor configurations using validated safe GPIO pins
+// Based on ESP32 research: GPIO 6-11 are flash, 34-39 are input-only
+// Safe pins: 4, 13, 14, 16-19, 21-23, 25-27, 32-33
 const MotorConfig MOTOR_CONFIGS[MOTOR_COUNT] = {
-    // stepPin, dirPin, enablePin, stepsPerRev, maxSpeed, accel, invertDir, name
-    {2,  4,  MOTORS_ENABLE_PIN, 200, 1000.0f, 500.0f, false, "J1-Base"},
-    {16, 17, MOTORS_ENABLE_PIN, 200, 1000.0f, 500.0f, false, "J2-Shoulder"},
-    {18, 19, MOTORS_ENABLE_PIN, 200, 1000.0f, 500.0f, false, "J3-Elbow"},
-    {21, 22, MOTORS_ENABLE_PIN, 200, 1000.0f, 500.0f, false, "J4-WristPitch"},
-    {23, 25, MOTORS_ENABLE_PIN, 200, 1000.0f, 500.0f, false, "J5-WristRoll"},
-    {26, 27, MOTORS_ENABLE_PIN, 200, 1000.0f, 500.0f, false, "J6-Gripper"},
+    // stepPin, dirPin, enablePin, stepsPerRev, microstepping, maxSpeedHz, accel, invertDir, name
+    {16, 17, MOTORS_ENABLE_PIN, 200, 16, 50000, 10000, false, "J1-Base"},
+    {18, 19, MOTORS_ENABLE_PIN, 200, 16, 50000, 10000, false, "J2-Shoulder"},
+    {21, 22, MOTORS_ENABLE_PIN, 200, 16, 50000, 10000, false, "J3-Elbow"},
+    {23, 25, MOTORS_ENABLE_PIN, 200, 16, 50000, 10000, false, "J4-WristPitch"},
+    {26, 27, MOTORS_ENABLE_PIN, 200, 16, 50000, 10000, false, "J5-WristRoll"},
+    {32, 33, MOTORS_ENABLE_PIN, 200, 16, 50000, 10000, false, "J6-Gripper"},
 };
+
+// Calculated full revolution steps (with microstepping)
+inline uint32_t getFullRevolution(uint8_t motor) {
+    if (motor >= MOTOR_COUNT) return 3200;
+    return MOTOR_CONFIGS[motor].stepsPerRev * MOTOR_CONFIGS[motor].microstepping;
+}
+
+// =============================================================================
+// Default Motion Parameters
+// =============================================================================
+#define DEFAULT_SPEED_HZ 1000      // steps/sec
+#define DEFAULT_ACCEL 500          // steps/sec²
+#define MAX_SPEED_HZ 50000         // safety limit
 
 // =============================================================================
 // Web Server Configuration
@@ -71,6 +86,10 @@ const MotorConfig MOTOR_CONFIGS[MOTOR_COUNT] = {
 // Set to 0 to disable limit checking
 #define MAX_POSITION_STEPS 100000
 #define MIN_POSITION_STEPS -100000
+
+// Per-joint position limits (in steps)
+const int32_t POSITION_LIMITS_MIN[MOTOR_COUNT] = {-100000, -50000, -50000, -25000, -25000, -10000};
+const int32_t POSITION_LIMITS_MAX[MOTOR_COUNT] = { 100000,  50000,  50000,  25000,  25000,  10000};
 
 // Emergency stop pin (optional, pull LOW to stop)
 // #define ESTOP_PIN 34

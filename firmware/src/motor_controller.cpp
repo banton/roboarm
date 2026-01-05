@@ -10,7 +10,10 @@ MotorController::MotorController() : _enabled(false) {
 }
 
 void MotorController::begin() {
-    DEBUG_PRINTLN("MotorController: Initializing...");
+    DEBUG_PRINTLN("MotorController: Initializing FastAccelStepper engine...");
+
+    // Initialize the FastAccelStepper engine
+    _engine.init();
 
     // Initialize enable pin
     pinMode(MOTORS_ENABLE_PIN, OUTPUT);
@@ -20,37 +23,32 @@ void MotorController::begin() {
     for (int i = 0; i < MOTOR_COUNT; i++) {
         const MotorConfig& cfg = MOTOR_CONFIGS[i];
 
-        // Create stepper with DRIVER interface (step + direction pins)
-        _steppers[i] = new AccelStepper(AccelStepper::DRIVER, cfg.stepPin, cfg.dirPin);
+        // Connect stepper to step pin (FastAccelStepper uses hardware peripherals)
+        _steppers[i] = _engine.stepperConnectToPin(cfg.stepPin);
 
-        // Configure stepper
-        _steppers[i]->setMaxSpeed(cfg.maxSpeed);
-        _steppers[i]->setAcceleration(cfg.acceleration);
-        _steppers[i]->setCurrentPosition(0);
+        if (_steppers[i]) {
+            // Configure direction pin
+            _steppers[i]->setDirectionPin(cfg.dirPin, cfg.invertDir);
 
-        // Set direction inversion if configured
-        _steppers[i]->setPinsInverted(cfg.invertDir, false, false);
+            // Configure enable pin with auto-enable
+            _steppers[i]->setEnablePin(cfg.enablePin);
+            _steppers[i]->setAutoEnable(true);
 
-        DEBUG_PRINTF("  %s: Step=%d, Dir=%d, Speed=%.0f, Accel=%.0f\n",
-                     cfg.name, cfg.stepPin, cfg.dirPin, cfg.maxSpeed, cfg.acceleration);
+            // Set motion parameters
+            _steppers[i]->setSpeedInHz(cfg.maxSpeedHz);
+            _steppers[i]->setAcceleration(cfg.acceleration);
+
+            DEBUG_PRINTF("  %s: Step=%d, Dir=%d, Speed=%lu Hz, Accel=%lu\n",
+                         cfg.name, cfg.stepPin, cfg.dirPin,
+                         cfg.maxSpeedHz, cfg.acceleration);
+        } else {
+            DEBUG_PRINTF("  ERROR: Failed to connect %s on pin %d\n",
+                         cfg.name, cfg.stepPin);
+        }
     }
 
     _enabled = false;
-    DEBUG_PRINTLN("MotorController: Ready");
-}
-
-bool MotorController::run() {
-    if (!_enabled) {
-        return false;
-    }
-
-    bool anyMoving = false;
-    for (int i = 0; i < MOTOR_COUNT; i++) {
-        if (_steppers[i]->run()) {
-            anyMoving = true;
-        }
-    }
-    return anyMoving;
+    DEBUG_PRINTLN("MotorController: Ready (using FastAccelStepper hardware acceleration)");
 }
 
 void MotorController::setEnabled(bool enabled) {
@@ -68,7 +66,7 @@ void MotorController::setEnabled(bool enabled) {
 }
 
 bool MotorController::moveTo(uint8_t joint, long position) {
-    if (!isValidJoint(joint)) {
+    if (!isValidJoint(joint) || !_steppers[joint]) {
         DEBUG_PRINTF("Motors: Invalid joint %d\n", joint);
         return false;
     }
@@ -78,8 +76,8 @@ bool MotorController::moveTo(uint8_t joint, long position) {
         return false;
     }
 
-    if (!isWithinLimits(position)) {
-        DEBUG_PRINTF("Motors: Position %ld out of limits\n", position);
+    if (!isWithinLimits(joint, position)) {
+        DEBUG_PRINTF("Motors: Position %ld out of limits for J%d\n", position, joint + 1);
         return false;
     }
 
@@ -93,11 +91,11 @@ bool MotorController::moveTo(uint8_t joint, long position) {
 }
 
 bool MotorController::moveRelative(uint8_t joint, long steps) {
-    if (!isValidJoint(joint)) {
+    if (!isValidJoint(joint) || !_steppers[joint]) {
         return false;
     }
 
-    long newPosition = _steppers[joint]->currentPosition() + steps;
+    long newPosition = _steppers[joint]->getCurrentPosition() + steps;
     return moveTo(joint, newPosition);
 }
 
@@ -111,7 +109,7 @@ bool MotorController::moveToMultiple(const long positions[MOTOR_COUNT]) {
 
     // Validate all positions first
     for (int i = 0; i < MOTOR_COUNT; i++) {
-        if (positions[i] != -1 && !isWithinLimits(positions[i])) {
+        if (positions[i] != LONG_MIN && !isWithinLimits(i, positions[i])) {
             DEBUG_PRINTF("Motors: J%d position %ld out of limits\n", i + 1, positions[i]);
             allValid = false;
         }
@@ -121,9 +119,9 @@ bool MotorController::moveToMultiple(const long positions[MOTOR_COUNT]) {
         return false;
     }
 
-    // Apply all movements
+    // Apply all movements (FastAccelStepper starts them near-simultaneously)
     for (int i = 0; i < MOTOR_COUNT; i++) {
-        if (positions[i] != -1) {
+        if (positions[i] != LONG_MIN && _steppers[i]) {
             _steppers[i]->moveTo(positions[i]);
 
             #if DEBUG_MOTORS
@@ -136,29 +134,31 @@ bool MotorController::moveToMultiple(const long positions[MOTOR_COUNT]) {
 }
 
 void MotorController::stop(uint8_t joint) {
-    if (isValidJoint(joint)) {
-        _steppers[joint]->stop();
+    if (isValidJoint(joint) && _steppers[joint]) {
+        _steppers[joint]->forceStop();
         DEBUG_PRINTF("Motors: %s STOPPED\n", MOTOR_CONFIGS[joint].name);
     }
 }
 
 void MotorController::stopAll() {
     for (int i = 0; i < MOTOR_COUNT; i++) {
-        _steppers[i]->stop();
+        if (_steppers[i]) {
+            _steppers[i]->forceStop();
+        }
     }
-    DEBUG_PRINTLN("Motors: ALL STOPPED");
+    DEBUG_PRINTLN("Motors: ALL STOPPED (emergency)");
 }
 
 bool MotorController::isMoving(uint8_t joint) const {
-    if (!isValidJoint(joint)) {
+    if (!isValidJoint(joint) || !_steppers[joint]) {
         return false;
     }
-    return _steppers[joint]->distanceToGo() != 0;
+    return _steppers[joint]->isRunning();
 }
 
 bool MotorController::isAnyMoving() const {
     for (int i = 0; i < MOTOR_COUNT; i++) {
-        if (_steppers[i]->distanceToGo() != 0) {
+        if (_steppers[i] && _steppers[i]->isRunning()) {
             return true;
         }
     }
@@ -166,28 +166,28 @@ bool MotorController::isAnyMoving() const {
 }
 
 long MotorController::getPosition(uint8_t joint) const {
-    if (!isValidJoint(joint)) {
+    if (!isValidJoint(joint) || !_steppers[joint]) {
         return 0;
     }
-    return _steppers[joint]->currentPosition();
+    return _steppers[joint]->getCurrentPosition();
 }
 
 long MotorController::getTargetPosition(uint8_t joint) const {
-    if (!isValidJoint(joint)) {
+    if (!isValidJoint(joint) || !_steppers[joint]) {
         return 0;
     }
-    return _steppers[joint]->targetPosition();
+    return _steppers[joint]->targetPos();
 }
 
 long MotorController::getDistanceToGo(uint8_t joint) const {
-    if (!isValidJoint(joint)) {
+    if (!isValidJoint(joint) || !_steppers[joint]) {
         return 0;
     }
-    return _steppers[joint]->distanceToGo();
+    return _steppers[joint]->targetPos() - _steppers[joint]->getCurrentPosition();
 }
 
 void MotorController::setZero(uint8_t joint) {
-    if (isValidJoint(joint)) {
+    if (isValidJoint(joint) && _steppers[joint]) {
         _steppers[joint]->setCurrentPosition(0);
         DEBUG_PRINTF("Motors: %s zeroed\n", MOTOR_CONFIGS[joint].name);
     }
@@ -195,19 +195,25 @@ void MotorController::setZero(uint8_t joint) {
 
 void MotorController::setZeroAll() {
     for (int i = 0; i < MOTOR_COUNT; i++) {
-        _steppers[i]->setCurrentPosition(0);
+        if (_steppers[i]) {
+            _steppers[i]->setCurrentPosition(0);
+        }
     }
     DEBUG_PRINTLN("Motors: All joints zeroed");
 }
 
-void MotorController::setMaxSpeed(uint8_t joint, float speed) {
-    if (isValidJoint(joint)) {
-        _steppers[joint]->setMaxSpeed(speed);
+void MotorController::setMaxSpeed(uint8_t joint, uint32_t speedHz) {
+    if (isValidJoint(joint) && _steppers[joint]) {
+        // Clamp to safety limit
+        if (speedHz > MAX_SPEED_HZ) {
+            speedHz = MAX_SPEED_HZ;
+        }
+        _steppers[joint]->setSpeedInHz(speedHz);
     }
 }
 
-void MotorController::setAcceleration(uint8_t joint, float acceleration) {
-    if (isValidJoint(joint)) {
+void MotorController::setAcceleration(uint8_t joint, uint32_t acceleration) {
+    if (isValidJoint(joint) && _steppers[joint]) {
         _steppers[joint]->setAcceleration(acceleration);
     }
 }
@@ -220,17 +226,17 @@ const MotorConfig& MotorController::getConfig(uint8_t joint) const {
     return MOTOR_CONFIGS[joint];
 }
 
-AccelStepper* MotorController::getStepper(uint8_t joint) {
+FastAccelStepper* MotorController::getStepper(uint8_t joint) {
     if (!isValidJoint(joint)) {
         return nullptr;
     }
     return _steppers[joint];
 }
 
-bool MotorController::isWithinLimits(long position) const {
-    #if MAX_POSITION_STEPS != 0
-    return position >= MIN_POSITION_STEPS && position <= MAX_POSITION_STEPS;
-    #else
-    return true;  // No limits configured
-    #endif
+bool MotorController::isWithinLimits(uint8_t joint, long position) const {
+    if (!isValidJoint(joint)) {
+        return false;
+    }
+    return position >= POSITION_LIMITS_MIN[joint] &&
+           position <= POSITION_LIMITS_MAX[joint];
 }

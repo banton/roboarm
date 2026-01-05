@@ -79,7 +79,7 @@ CommandResult CommandParser::execute(const String& command) {
 CommandResult CommandParser::handleG0(const String& args) {
     long positions[MOTOR_COUNT];
     for (int i = 0; i < MOTOR_COUNT; i++) {
-        positions[i] = -1;  // -1 means don't move
+        positions[i] = LONG_MIN;  // LONG_MIN means don't move
     }
 
     int parsed = parseJointPositions(args, positions);
@@ -101,7 +101,7 @@ CommandResult CommandParser::handleG0(const String& args) {
 CommandResult CommandParser::handleG1(const String& args) {
     long positions[MOTOR_COUNT];
     for (int i = 0; i < MOTOR_COUNT; i++) {
-        positions[i] = -1;
+        positions[i] = LONG_MIN;
     }
 
     int parsed = parseJointPositions(args, positions);
@@ -115,7 +115,7 @@ CommandResult CommandParser::handleG1(const String& args) {
 
     // Convert to absolute positions for relative move
     for (int i = 0; i < MOTOR_COUNT; i++) {
-        if (positions[i] != -1) {
+        if (positions[i] != LONG_MIN) {
             positions[i] = motors.getPosition(i) + positions[i];
         }
     }
@@ -179,7 +179,7 @@ String CommandParser::getPositionReport() const {
 }
 
 String CommandParser::getSettingsReport() const {
-    String report = "Settings:\n";
+    String report = "Settings (FastAccelStepper):\n";
 
     for (int i = 0; i < MOTOR_COUNT; i++) {
         const MotorConfig& cfg = motors.getConfig(i);
@@ -187,8 +187,9 @@ String CommandParser::getSettingsReport() const {
                   " Step:" + String(cfg.stepPin) +
                   " Dir:" + String(cfg.dirPin) +
                   " SPR:" + String(cfg.stepsPerRev) +
-                  " MaxSpd:" + String(cfg.maxSpeed, 0) +
-                  " Accel:" + String(cfg.acceleration, 0) + "\n";
+                  " uStep:" + String(cfg.microstepping) +
+                  " MaxHz:" + String(cfg.maxSpeedHz) +
+                  " Accel:" + String(cfg.acceleration) + "\n";
     }
 
     return report;
