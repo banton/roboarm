@@ -18,6 +18,10 @@
 String serialBuffer = "";
 bool serialComplete = false;
 
+// Forward declarations
+void handleSerialInput();
+void handleStatusLED();
+
 // Status LED timing
 unsigned long lastStatusBlink = 0;
 const unsigned long STATUS_BLINK_INTERVAL = 1000;

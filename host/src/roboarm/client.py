@@ -6,7 +6,6 @@ Supports both HTTP (WiFi) and Serial (USB) connections.
 
 from __future__ import annotations
 
-import json
 import time
 from dataclasses import dataclass
 from typing import Any

@@ -9,7 +9,7 @@ Usage:
 
 from __future__ import annotations
 
-from typing import Annotated, Optional
+from typing import Annotated
 
 import typer
 from rich import print as rprint
@@ -114,14 +114,14 @@ def stop(
 @app.command()
 def move(
     url: Annotated[str, typer.Option("--url", "-u", help="Controller URL")] = "http://roboarm.local",
-    j1: Annotated[Optional[int], typer.Option("--j1", help="Joint 1 position")] = None,
-    j2: Annotated[Optional[int], typer.Option("--j2", help="Joint 2 position")] = None,
-    j3: Annotated[Optional[int], typer.Option("--j3", help="Joint 3 position")] = None,
-    j4: Annotated[Optional[int], typer.Option("--j4", help="Joint 4 position")] = None,
-    j5: Annotated[Optional[int], typer.Option("--j5", help="Joint 5 position")] = None,
-    j6: Annotated[Optional[int], typer.Option("--j6", help="Joint 6 position")] = None,
-    relative: Annotated[bool, typer.Option("--relative", "-r", help="Move relative to current")] = False,
-    wait: Annotated[bool, typer.Option("--wait", "-w", help="Wait for move to complete")] = False,
+    j1: Annotated[int | None, typer.Option("--j1", help="Joint 1 position")] = None,
+    j2: Annotated[int | None, typer.Option("--j2", help="Joint 2 position")] = None,
+    j3: Annotated[int | None, typer.Option("--j3", help="Joint 3 position")] = None,
+    j4: Annotated[int | None, typer.Option("--j4", help="Joint 4 position")] = None,
+    j5: Annotated[int | None, typer.Option("--j5", help="Joint 5 position")] = None,
+    j6: Annotated[int | None, typer.Option("--j6", help="Joint 6 position")] = None,
+    relative: Annotated[bool, typer.Option("--relative", "-r", help="Relative move")] = False,
+    wait: Annotated[bool, typer.Option("--wait", "-w", help="Wait for completion")] = False,
 ) -> None:
     """Move joints to specified positions."""
     if all(j is None for j in [j1, j2, j3, j4, j5, j6]):
