@@ -119,7 +119,7 @@ void RoboarmWebServer::setupRoutes() {
 
     // GET / - Simple status page
     _server.on("/", HTTP_GET, [this](AsyncWebServerRequest* request) {
-        String html = R"(
+        String html = R"rawhtml(
 <!DOCTYPE html>
 <html>
 <head>
@@ -149,30 +149,30 @@ void RoboarmWebServer::setupRoutes() {
     <pre id="output">Ready...</pre>
     <script>
         async function sendCmd(cmd) {
-            const res = await fetch('/api/command', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
+            const res = await fetch("/api/command", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
                 body: JSON.stringify({command: cmd})
             });
             const data = await res.json();
-            document.getElementById('output').textContent = JSON.stringify(data, null, 2);
+            document.getElementById("output").textContent = JSON.stringify(data, null, 2);
         }
         async function getStatus() {
-            const res = await fetch('/api/status');
+            const res = await fetch("/api/status");
             const data = await res.json();
-            document.getElementById('output').textContent = JSON.stringify(data, null, 2);
+            document.getElementById("output").textContent = JSON.stringify(data, null, 2);
         }
         function sendInput() {
-            const cmd = document.getElementById('cmd').value;
+            const cmd = document.getElementById("cmd").value;
             if (cmd) sendCmd(cmd);
         }
-        document.getElementById('cmd').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') sendInput();
+        document.getElementById("cmd").addEventListener("keypress", (e) => {
+            if (e.key === "Enter") sendInput();
         });
     </script>
 </body>
 </html>
-)";
+)rawhtml";
         request->send(200, "text/html", html);
     });
 }
