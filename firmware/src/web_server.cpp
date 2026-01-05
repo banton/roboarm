@@ -322,7 +322,7 @@ void RoboarmWebServer::buildConfigJson(JsonDocument& doc) {
         motor["step_pin"] = cfg.stepPin;
         motor["dir_pin"] = cfg.dirPin;
         motor["steps_per_rev"] = cfg.stepsPerRev;
-        motor["max_speed"] = cfg.maxSpeed;
+        motor["max_speed"] = cfg.maxSpeedHz;
         motor["acceleration"] = cfg.acceleration;
         motor["invert_dir"] = cfg.invertDir;
     }

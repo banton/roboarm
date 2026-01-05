@@ -58,8 +58,8 @@ void setup() {
 }
 
 void loop() {
-    // Run motor control (non-blocking)
-    motors.run();
+    // FastAccelStepper uses hardware timers - no run() needed
+    // Motors are controlled automatically via MCPWM/RMT peripherals
 
     // Handle serial input
     handleSerialInput();
